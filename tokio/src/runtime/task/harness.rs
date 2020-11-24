@@ -4,7 +4,6 @@ use crate::runtime::task::{JoinError, Notified, Schedule, Task};
 
 use std::future::Future;
 use std::mem;
-use std::panic;
 use std::ptr::NonNull;
 use std::task::{Poll, Waker};
 
@@ -86,7 +85,7 @@ where
         // future has been obtained. This also ensures the `*mut T` pointer
         // contains the future (as opposed to the output) and is initialized.
 
-        let res = panic::catch_unwind(panic::AssertUnwindSafe(|| {
+        let res = Ok({
             struct Guard<'a, T: Future, S: Schedule> {
                 core: &'a Core<T, S>,
             }
@@ -111,7 +110,7 @@ where
 
                 res.map(Ok)
             }
-        }));
+        });
 
         match res {
             Ok(Poll::Ready(out)) => {
@@ -289,9 +288,7 @@ where
 
     fn cancel_task(self) {
         // Drop the future from a panic guard.
-        let res = panic::catch_unwind(panic::AssertUnwindSafe(|| {
-            self.core().drop_future_or_output();
-        }));
+        let res = Ok(self.core().drop_future_or_output());
 
         if let Err(err) = res {
             // Dropping the future panicked, complete the join
